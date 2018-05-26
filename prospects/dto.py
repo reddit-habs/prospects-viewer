@@ -1,5 +1,7 @@
 import enum
+import re
 
+import arrow
 from attr import attrs, attrib
 
 
@@ -45,6 +47,14 @@ class SkaterStats(Stats):
     assists = attrib()
     plus_minus = attrib()
 
+    @property
+    def points(self):
+        return self.goals + self.assists
+
+    @property
+    def points_per_game(self):
+        return self.points / self.games
+
 
 @attrs(slots=True)
 class GoalieStats(Stats):
@@ -70,3 +80,42 @@ class Info:
 
     url = attrib()
     draft = attrib()
+
+    @property
+    def height_imp(self):
+        return self.height.split('/')[0].strip()
+
+    @property
+    def weight_imp(self):
+        return self.weight.split('/')[0].strip()
+
+    @property
+    def age_frac(self):
+        birthday = arrow.get(self.birthday, 'MMM DD, YYYY')
+        delta = arrow.now() - birthday
+        return round(delta.days / 365.242199, 1)
+
+
+RE_DRAFT_STR = re.compile(r"(\d{4}) round (\d+) #(\d+) overall by (.+)")
+
+
+@attrs(slots=True)
+class Draft:
+    year = attrib()
+    round = attrib()
+    overall = attrib()
+    team = attrib()
+
+    @classmethod
+    def from_str(cls, draft_str):
+        match = RE_DRAFT_STR.match(draft_str)
+        if not match:
+            raise ValueError("invalid draft string")
+        return Draft(year=int(match.group(1)),
+                     round=int(match.group(2)),
+                     overall=int(match.group(3)),
+                     team=match.group(4))
+
+    @property
+    def short(self):
+        return "{} #{}".format(self.year, self.overall)

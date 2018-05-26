@@ -9,14 +9,14 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from .dto import GoalieStats, Info, Position, SkaterStats, Team
+from .dto import GoalieStats, Info, Position, SkaterStats, Team, Draft
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
-log.addHandler(logging.StreamHandler(sys.stdout))
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 
-RE_PLAYER_PATTERN = re.compile(r"(.+)\s*\(([^\)]+)\)")
+RE_PLAYER_PATTERN = re.compile(r"(.+)\s+\(([^\)]+)\)")
 
 
 class ThrottledHttpClient:
@@ -89,7 +89,7 @@ def parse_player_string(player_str):
     match = RE_PLAYER_PATTERN.match(player_str)
     name = match.group(1)
     positions_str = match.group(2)
-    positions = [Position.from_str(pos) for pos in positions_str.split("/")]
+    positions = [Position.from_str(pos) for pos in re.split(r"[/\\]", positions_str)]
     return name, positions
 
 
@@ -167,7 +167,7 @@ def parse_info(url):
     for section in sections:
         first, second, *_rest = section.find_all('div')
         if 'drafted' in get_element_text(first).lower():
-            draft = get_element_text(second)
+            draft = Draft.from_str(get_element_text(second))
             break
 
     rows = left_side.find_all('li')
