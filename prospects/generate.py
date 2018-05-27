@@ -62,13 +62,13 @@ def render(data):
 
     doc = Document()
 
-    doc.add(H2("Left winger"))
+    doc.add(H2("Left wingers"))
     doc.add(generate_skater_table(lw))
 
     doc.add(H2("Centers"))
     doc.add(generate_skater_table(center))
 
-    doc.add(H2("Right winger"))
+    doc.add(H2("Right wingers"))
     doc.add(generate_skater_table(rw))
 
     doc.add(H2("Left-handed defensemen"))
