@@ -9,7 +9,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from .dto import GoalieStats, Info, Position, SkaterStats, Team, Draft
+from .dto import GoalieStats, Player, Position, SkaterStats, Draft, Shoots
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -93,51 +93,61 @@ def parse_player_string(player_str):
     return name, positions
 
 
+def parse_skater_stats(row, team_name, league_name):
+    games = get_td_class_int(row, 'gp')
+    goals = get_td_class_int(row, 'g')
+    assists = get_td_class_int(row, 'a')
+    plus_minus = get_td_class_int(row, 'pm')
+    return SkaterStats(games=games, team_name=team_name, league_name=league_name,
+                       goals=goals, assists=assists, plus_minus=plus_minus)
+
+
 def parse_skaters(skaters_table):
     rows = skaters_table.find('tbody').find_all('tr')
     last_player = None
     players = []
     for row in rows:
-        teams = []
-
         player_str = get_td_class_text(row, 'player')
         team_name = get_td_class_text(row, 'team')
         league_name = get_td_class_text(row, 'league')
 
-        if team_name and league_name:
-            teams.append(Team(team_name, league_name))
-
-        if not player_str:
-            last_player.teams.extend(teams)
-        else:
+        if player_str:
+            # player stats are not split on multiple rows
             name, positions = parse_player_string(player_str)
 
             log.info("processing skater %s", name)
 
             info_url = row.find('td', class_="player").find('a')['href']
-            info = parse_info(info_url)
+            last_player = parse_player(info_url, name, positions)
 
-            games = get_td_class_int(row, 'gp')
-            goals = get_td_class_int(row, 'g')
-            assists = get_td_class_int(row, 'a')
-            plus_minus = get_td_class_int(row, 'pm')
+            if team_name and league_name:
+                last_player.stats.append(parse_skater_stats(row, team_name, league_name))
 
-            last_player = SkaterStats(name=name, positions=positions, teams=teams, games=games,
-                                      goals=goals, assists=assists, plus_minus=plus_minus,
-                                      info=info)
             players.append(last_player)
+        elif team_name and league_name:
+            # player stats are split on multiple rows
+            last_player.stats.append(parse_skater_stats(row, team_name, league_name))
+        else:
+            raise Exception("unhandled row case")
     return players
 
 
 def parse_goalies(goalies_table):
-    rows = goalies_table.find('tbody').find_all('tr', class_=None)
-    players = []
+    rows = []
+    for tbody in goalies_table.find_all('tbody'):
+        rows.extend(tbody.find_all('tr', class_=None))
+
+    players = {}
     for row in rows:
         name = get_td_class_text(row, 'player')
         log.info("processing goalie %s", name)
 
         info_url = row.find('td', class_="player").find('a')['href']
-        info = parse_info(info_url)
+        if info_url in players:
+            player = players[info_url]
+        else:
+            player = parse_player(info_url, name, [Position.GOALIE])
+            players[info_url] = player
 
         team_name = get_td_class_text(row, 'team')
         league_name = get_td_class_text(row, 'league')
@@ -145,10 +155,12 @@ def parse_goalies(goalies_table):
         goal_average = get_td_class_text(row, 'gaa')
         save_percent = get_td_class_text(row, 'svp')
 
-        goalie = GoalieStats(name=name, teams=[Team(team_name, league_name)], positions=[Position.GOALIE],
-                             games=games, info=info, goal_average=goal_average, save_percent=save_percent)
-        players.append(goalie)
-    return players
+        player.stats.append(GoalieStats(team_name=team_name,
+                                        league_name=league_name,
+                                        games=games,
+                                        goal_average=goal_average,
+                                        save_percent=save_percent))
+    return list(players.values())
 
 
 def parse_data_col(row):
@@ -156,7 +168,7 @@ def parse_data_col(row):
     return get_element_text(data)
 
 
-def parse_info(url):
+def parse_player(url, name, positions):
     doc = create_dom(client.get(url))
     info_table = doc.find('div', class_='table-view')
     table_div, extra_div = info_table.find_all('div', recursive=False)
@@ -179,10 +191,11 @@ def parse_info(url):
     rows = right_side.find_all('li')
     height = parse_data_col(rows[1])
     weight = parse_data_col(rows[2])
-    shoots = parse_data_col(rows[3])
+    shoots = Shoots.from_str(parse_data_col(rows[3]))
 
-    return Info(birthday=birthday, age=age, nation=nation, birthplace=birthplace,
-                shoots=shoots, height=height, weight=weight, url=url, draft=draft)
+    return Player(name=name, positions=positions,
+                  birthday=birthday, age=age, nation=nation, birthplace=birthplace,
+                  shoots=shoots, height=height, weight=weight, url=url, draft=draft)
 
 
 def parse_players(url):

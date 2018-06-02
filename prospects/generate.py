@@ -1,19 +1,19 @@
-from .dto import Position
+from .dto import Position, Shoots
 from .markdown import Document, Table, H2, Link
 
 
-def render(data):
+def render(data, age_cutoff=26.0):
     lw = []
     center = []
     rw = []
     lhd = []
     rhd = []
-    goalie = data['goalies']
+    goalie = [goalie for goalie in data['goalies'] if goalie.age_frac <= age_cutoff]
 
     for skater in data['skaters']:
-        if skater.games >= 10:
+        if any(stats.games >= 10 for stats in skater.stats) and skater.age_frac <= age_cutoff:
             if Position.DEFENSE in skater.positions:
-                if skater.info.shoots == 'L':
+                if skater.shoots == Shoots.LEFT:
                     lhd.append(skater)
                 else:
                     rhd.append(skater)
@@ -28,36 +28,37 @@ def render(data):
     def generate_skater_table(players):
         t = Table()
         t.add_columns("Player", "Age", "Height", "Weight", "League", "Games",
-                      "Goals", "Assists", "Points", "PPG", "Drafted")
+                      "Goals", "Assists", "Points", "PPG", "Drafted", "PT/82")
         for player in players:
-            leagues = '/'.join(set(team.league for team in player.teams))
-            t.add_row(Link(player.name, player.info.url),
-                      player.info.age_frac,
-                      player.info.height_imp,
-                      player.info.weight_imp,
-                      leagues,
-                      player.games,
-                      player.goals,
-                      player.assists,
-                      player.points,
-                      str(round(player.points_per_game, 2)),
-                      player.info.draft.short if player.info.draft is not None else "")
+            stats = player.get_skater_stats()
+            t.add_row(Link(player.name, player.url),
+                      player.age_frac,
+                      player.height_imp,
+                      player.weight_imp,
+                      stats.league_name,
+                      stats.games,
+                      stats.goals,
+                      stats.assists,
+                      stats.points,
+                      stats.points_per_game,
+                      player.draft.short if player.draft is not None else "",
+                      player.get_points_translation() or "")
         return t
 
     def generate_goalie_table(goalies):
         t = Table()
         t.add_columns("Player", "Age", "Height", "Weight", "League", "Games", "GAA", "SV%", "Drafted")
         for player in goalies:
-            leagues = '/'.join(set(team.league for team in player.teams))
-            t.add_row(Link(player.name, player.info.url),
-                      player.info.age_frac,
-                      player.info.height_imp,
-                      player.info.weight_imp,
-                      leagues,
-                      player.games,
-                      player.goal_average,
-                      player.save_percent,
-                      player.info.draft.short if player.info.draft is not None else "")
+            stats = player.get_goalie_stats()
+            t.add_row(Link(player.name, player.url),
+                      player.age_frac,
+                      player.height_imp,
+                      player.weight_imp,
+                      stats.league_name,
+                      stats.games,
+                      stats.goal_average,
+                      stats.save_percent,
+                      player.draft.short if player.draft is not None else "")
         return t
 
     doc = Document()
