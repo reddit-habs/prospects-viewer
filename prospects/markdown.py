@@ -14,7 +14,6 @@ def escape(url):
 
 
 class Buffer:
-
     def __init__(self):
         self._inner = StringIO()
 
@@ -29,7 +28,6 @@ class Buffer:
 
 
 class Document:
-
     def __init__(self):
         self.items = []
 
@@ -45,13 +43,11 @@ class Document:
 
 
 class Element:
-
     def render(self, writer: Buffer):
         pass
 
 
 class _Heading(Element):
-
     def __init__(self, text, *, size):
         self.text = text
         self.size = size
@@ -70,7 +66,6 @@ H3 = partial(_Heading, size=3)
 
 
 class HorizontalRule(Element):
-
     def __init__(self):
         pass
 
@@ -79,7 +74,6 @@ class HorizontalRule(Element):
 
 
 class Paragraph(Element):
-
     def __init__(self, text):
         self.text = text
 
@@ -89,7 +83,6 @@ class Paragraph(Element):
 
 
 class Quote(Element):
-
     def __init__(self, text):
         self.text = text
 
@@ -100,7 +93,6 @@ class Quote(Element):
 
 
 class Link(Element):
-
     def __init__(self, text, url):
         self.text = text
         self.url = url
@@ -114,7 +106,6 @@ class Link(Element):
 
 
 class List(Element):
-
     def __init__(self, items=None, numbered=False):
         if items is None:
             self.items = []
@@ -139,13 +130,12 @@ class List(Element):
 
 
 class Table(Element):
-
     def __init__(self):
         self.columns = []
         self.alignments = []
         self.rows = []
 
-    def add_column(self, name, *, align='center'):
+    def add_column(self, name, *, align="center"):
         self.columns.append(name)
         self.alignments.append(align.lower())
 

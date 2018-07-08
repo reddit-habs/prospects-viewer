@@ -2,12 +2,15 @@ from pathlib import Path
 import json
 import enum
 import pickle
+import logging
 
 import attr
 import click
 
 from .scrape import parse_players
 from . import generate
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class AttrsJSONEncoder(json.JSONEncoder):
@@ -21,28 +24,27 @@ class AttrsJSONEncoder(json.JSONEncoder):
 
 
 @click.command()
-@click.argument('url', required=False)
-@click.option('--pickle', 'pickle_path', default=None, help="Path to pickle dump")
-@click.option('--json', 'json_path', default=None, help="Path to json dump")
-@click.option('-u', '--use-pickle', 'use_pickle', default=None, help="Use saved pickle")
+@click.argument("url", required=False)
+@click.option("--pickle", "pickle_path", default=None, help="Path to pickle dump")
+@click.option("--json", "json_path", default=None, help="Path to json dump")
+@click.option("-u", "--use-pickle", "use_pickle", default=None, help="Use saved pickle")
 def main(url, pickle_path, json_path, use_pickle):
     if use_pickle is not None:
-        data = pickle.loads(Path(use_pickle).read_bytes())
+        players = pickle.loads(Path(use_pickle).read_bytes())
     else:
         if url is None:
             print("Error: missing url")
             exit()
-        skaters, goalies = parse_players(url)
-        data = dict(skaters=skaters, goalies=goalies)
+        players = parse_players(url)
 
     if pickle_path:
-        Path(pickle_path).write_bytes(pickle.dumps(data))
+        Path(pickle_path).write_bytes(pickle.dumps(players))
 
     if json_path:
-        Path(json_path).write_text(AttrsJSONEncoder(indent=2).encode(data))
+        Path(json_path).write_text(AttrsJSONEncoder(indent=2).encode(players))
 
-    print(generate.render(data))
+    print(generate.render(players))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
