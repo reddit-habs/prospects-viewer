@@ -2,7 +2,7 @@ import enum
 import re
 
 import arrow
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 
 class Position(enum.Enum):
@@ -21,6 +21,12 @@ class Position(enum.Enum):
             return STR_TO_PLAYER_POSITION[pos]
         except KeyError:
             raise ValueError("unknown position string: " + pos)
+
+    def to_str(self):
+        for key, val in STR_TO_PLAYER_POSITION.items():
+            if self == val:
+                return key.upper()
+        raise ValueError
 
 
 STR_TO_PLAYER_POSITION = dict(
@@ -88,6 +94,7 @@ class Stats:
     team_name = attrib()
     league_name = attrib()
     games = attrib()
+    tournament = attrib()
 
 
 @attrs(slots=True)
@@ -130,10 +137,7 @@ class Draft:
         if not match:
             raise ValueError("invalid draft string")
         return Draft(
-            year=int(match.group(1)),
-            round=int(match.group(2)),
-            overall=int(match.group(3)),
-            team=match.group(4),
+            year=int(match.group(1)), round=int(match.group(2)), overall=int(match.group(3)), team=match.group(4)
         )
 
     @property

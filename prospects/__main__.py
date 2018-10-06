@@ -1,14 +1,14 @@
-from pathlib import Path
-import json
 import enum
-import pickle
+import json
 import logging
+import pickle
+from pathlib import Path
 
 import attr
 import click
 
-from .scrape import parse_players
-from . import generate
+from . import generate_pool, generate_progress
+from .scrape import Scraper
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -23,19 +23,25 @@ class AttrsJSONEncoder(json.JSONEncoder):
             super().default(o)
 
 
-@click.command()
+@click.group()
+def cli():
+    pass
+
+
+@cli.command(help="generate a full report on a team's prospects")
 @click.argument("url", required=False)
 @click.option("--pickle", "pickle_path", default=None, help="Path to pickle dump")
 @click.option("--json", "json_path", default=None, help="Path to json dump")
 @click.option("-u", "--use-pickle", "use_pickle", default=None, help="Use saved pickle")
-def main(url, pickle_path, json_path, use_pickle):
+def pool(url, pickle_path, json_path, use_pickle):
     if use_pickle is not None:
         players = pickle.loads(Path(use_pickle).read_bytes())
     else:
         if url is None:
             print("Error: missing url")
             exit()
-        players = parse_players(url)
+        scraper = Scraper()
+        players = scraper.parse_depth_chart(url)
 
     if pickle_path:
         Path(pickle_path).write_bytes(pickle.dumps(players))
@@ -43,8 +49,24 @@ def main(url, pickle_path, json_path, use_pickle):
     if json_path:
         Path(json_path).write_text(AttrsJSONEncoder(indent=2).encode(players))
 
-    print(generate.render(players))
+    print(generate_pool.render(players))
+
+
+@cli.command(help="generate a progress report on players")
+@click.option("--links", "links", required=True, help="path to a file with elite prospects URLs separated by a line")
+@click.option("--prev", "prev", help="path to last week's saved state")
+def progress(links, prev=None):
+    lines = filter(None, map(str.strip, Path(links).read_text().split("\n")))
+    scraper = Scraper()
+    players_then = None
+    if prev is not None:
+        players_then = pickle.loads(Path(prev).read_bytes())
+    players_now = {}
+    for line in lines:
+        player = scraper.parse_player(line)
+        players_now[line] = player
+    print(generate_progress.render(players_now, players_then))
 
 
 if __name__ == "__main__":
-    main()
+    cli(prog_name="prospects")
