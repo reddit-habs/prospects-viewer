@@ -55,7 +55,8 @@ def pool(url, pickle_path, json_path, use_pickle):
 @cli.command(help="generate a progress report on players")
 @click.option("--links", "links", required=True, help="path to a file with elite prospects URLs separated by a line")
 @click.option("--prev", "prev", help="path to last week's saved state")
-def progress(links, prev=None):
+@click.option("--save", "save", help="where to save data dump")
+def progress(links, save=None, prev=None):
     lines = filter(None, map(str.strip, Path(links).read_text().split("\n")))
     scraper = Scraper()
     players_then = None
@@ -65,6 +66,9 @@ def progress(links, prev=None):
     for line in lines:
         player = scraper.parse_player(line)
         players_now[line] = player
+    if save:
+        with open(save, "wb") as f:
+            pickle.dump(players_now, f)
     print(generate_progress.render(players_now, players_then))
 
 

@@ -1,5 +1,5 @@
 from .dto import Position, Shoots
-from .markdown import H2, Document, HorizontalRule, Table
+from .markdown import H1, H2, Document, Table
 
 SORT_ORDER_POS = ["C", "LW", "RW", "W", "F", "LD", "RD", "G"]
 
@@ -9,31 +9,34 @@ def sort_player_pos_name(p):
     return (SORT_ORDER_POS.index(pos), player.name)
 
 
-def render(players_now, players_then):
-    doc = Document()
+def lookup_prev_stats(prev_data, url, stats_now):
+    player = prev_data[url]
+    s = [
+        s
+        for s in player.stats
+        if s.season_end == stats_now.season_end
+        and s.league_name == stats_now.league_name
+        and s.team_name == stats_now.team_name
+    ]
+    if len(s) > 0:
+        return s[0]
+    else:
+        return None
 
-    skater_list = []
-    goalie_list = []
 
-    for url, player in players_now.items():
-        if player.position == Position.DEFENSE:
-            if player.shoots == Shoots.LEFT:
-                skater_list.append((player, "LD", url))
-            else:
-                skater_list.append((player, "RD", url))
-        elif player.position == Position.GOALIE:
-            goalie_list.append((player, "G", url))
-        else:
-            skater_list.append((player, player.position.to_str(), url))
-
-    skater_list.sort(key=sort_player_pos_name)
-
+def make_skater_table(skater_list, prev_data=None):
     skaters_table = Table()
-    skaters_table.add_columns("Position", "Name", "Age", "League", "GP", "G", "A", "Pts", "+/-", "Draft")
+    skaters_table.add_columns("Position", "Name", "Age", "League", "GP", "G", "A", "Pts", "PPG", "+/-", "Draft")
 
     for player, pos, url in skater_list:
         stats = [stats for stats in player.stats if stats.season_end == 2019 and not stats.tournament]
         for idx, srow in enumerate(stats):
+
+            if prev_data is not None:
+                prev = lookup_prev_stats(prev_data, url, srow)
+                if prev is not None:
+                    srow = srow.substract(prev)
+
             if idx == 0:
                 skaters_table.add_row(
                     pos,
@@ -43,7 +46,8 @@ def render(players_now, players_then):
                     srow.games,
                     srow.goals,
                     srow.assists,
-                    srow.goals + srow.assists,
+                    srow.points,
+                    srow.points_per_game,
                     srow.plus_minus,
                     player.draft.short if player.draft else "-",
                 )
@@ -56,11 +60,15 @@ def render(players_now, players_then):
                     srow.games,
                     srow.goals,
                     srow.assists,
-                    srow.goals + srow.assists,
+                    srow.points,
+                    srow.points_per_game,
                     srow.plus_minus,
                     "-",
                 )
+    return skaters_table
 
+
+def make_goalie_table(goalie_list):
     goalie_table = Table()
     goalie_table.add_columns("Position", "Name", "Age", "League", "GP", "SV%", "GAA", "Draft")
 
@@ -90,11 +98,49 @@ def render(players_now, players_then):
                     player.draft.short if player.draft else "-",
                 )
 
-    doc.add(H2("Skaters"))
-    doc.add(skaters_table)
-    doc.add(HorizontalRule())
+    return goalie_table
+
+
+def render(players_now, players_then):
+    doc = Document()
+
+    forwards_list = []
+    defense_list = []
+    goalie_list = []
+
+    for url, player in players_now.items():
+        if player.position == Position.DEFENSE:
+            if player.shoots == Shoots.LEFT:
+                defense_list.append((player, "LD", url))
+            else:
+                defense_list.append((player, "RD", url))
+        elif player.position == Position.GOALIE:
+            goalie_list.append((player, "G", url))
+        else:
+            forwards_list.append((player, player.position.to_str(), url))
+
+    forwards_list.sort(key=sort_player_pos_name)
+    defense_list.sort(key=sort_player_pos_name)
+    goalie_list.sort(key=sort_player_pos_name)
+
+    doc.add(H1("Stats this week"))
+
+    doc.add(H2("Forwards"))
+    doc.add(make_skater_table(forwards_list, players_then))
+
+    doc.add(H2("Defensemen"))
+    doc.add(make_skater_table(defense_list, players_then))
+
+    doc.add(H1("Seasons totals"))
+
+    doc.add(H2("Forwards"))
+    doc.add(make_skater_table(forwards_list))
+
+    doc.add(H2("Defensemen"))
+    doc.add(make_skater_table(defense_list))
+
     doc.add(H2("Goalies"))
-    doc.add(goalie_table)
+    doc.add(make_goalie_table(goalie_list))
     return doc.render()
 
 

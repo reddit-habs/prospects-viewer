@@ -1,8 +1,9 @@
 import enum
 import re
 
-import arrow
 from attr import attrib, attrs
+
+import arrow
 
 
 class Position(enum.Enum):
@@ -113,6 +114,18 @@ class SkaterStats(Stats):
             return 0
         else:
             return round(self.points / self.games, 2)
+
+    def substract(self, other):
+        return SkaterStats(
+            season_end=self.season_end,
+            team_name=self.team_name,
+            league_name=self.league_name,
+            tournament=self.tournament,
+            games=self.games - other.games,
+            goals=self.goals - other.goals,
+            assists=self.assists - other.assists,
+            plus_minus=self.plus_minus - other.plus_minus,
+        )
 
 
 @attrs(slots=True)
