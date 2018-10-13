@@ -24,6 +24,13 @@ def lookup_prev_stats(prev_data, url, stats_now):
         return None
 
 
+def get_player_name(player, stats):
+    if stats.injured:
+        return "{} \N{HOSPITAL}".format(player.name)
+    else:
+        return player.name
+
+
 def make_skater_table(skater_list, prev_data=None):
     skaters_table = Table()
     skaters_table.add_columns("Position", "Name", "Age", "League", "GP", "G", "A", "Pts", "PPG", "+/-", "Draft")
@@ -32,7 +39,7 @@ def make_skater_table(skater_list, prev_data=None):
         stats = [stats for stats in player.stats if stats.season_end == 2019 and not stats.tournament]
         for idx, srow in enumerate(stats):
 
-            if prev_data is not None:
+            if prev_data is not None and url in prev_data:
                 prev = lookup_prev_stats(prev_data, url, srow)
                 if prev is not None:
                     srow = srow.substract(prev)
@@ -40,7 +47,7 @@ def make_skater_table(skater_list, prev_data=None):
             if idx == 0:
                 skaters_table.add_row(
                     pos,
-                    player.name,
+                    get_player_name(player, srow),
                     "{:.1f}".format(player.age_frac),
                     srow.league_name,
                     srow.games,
@@ -78,7 +85,7 @@ def make_goalie_table(goalie_list):
             if idx == 0:
                 goalie_table.add_row(
                     pos,
-                    player.name,
+                    get_player_name(player, srow),
                     "{:.1f}".format(player.age_frac),
                     srow.league_name,
                     srow.games,

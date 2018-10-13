@@ -56,7 +56,7 @@ class Shoots(enum.Enum):
             raise ValueError("unknown shoots string: " + shoots)
 
 
-@attrs(slots=True)
+@attrs(slots=True, kw_only=True)
 class Player:
     name = attrib()
     position = attrib()
@@ -89,16 +89,17 @@ class Player:
         self.age_frac = round(delta.days / 365.242199, 1)
 
 
-@attrs(slots=True)
+@attrs(slots=True, kw_only=True)
 class Stats:
     season_end = attrib()  # year that represents when the season ended
     team_name = attrib()
     league_name = attrib()
     games = attrib()
-    tournament = attrib()
+    tournament = attrib(default=False)
+    injured = attrib(default=False)
 
 
-@attrs(slots=True)
+@attrs(slots=True, kw_only=True)
 class SkaterStats(Stats):
     goals = attrib()
     assists = attrib()
@@ -121,6 +122,7 @@ class SkaterStats(Stats):
             team_name=self.team_name,
             league_name=self.league_name,
             tournament=self.tournament,
+            injured=self.injured,
             games=self.games - other.games,
             goals=self.goals - other.goals,
             assists=self.assists - other.assists,
@@ -128,7 +130,7 @@ class SkaterStats(Stats):
         )
 
 
-@attrs(slots=True)
+@attrs(slots=True, kw_only=True)
 class GoalieStats(Stats):
     goal_average = attrib()
     save_percent = attrib()
@@ -137,7 +139,7 @@ class GoalieStats(Stats):
 RE_DRAFT_STR = re.compile(r"(\d{4}) round (\d+) #(\d+) overall by (.+)")
 
 
-@attrs(slots=True)
+@attrs(slots=True, kw_only=True)
 class Draft:
     year = attrib()
     round = attrib()

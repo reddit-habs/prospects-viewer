@@ -9,6 +9,7 @@ import click
 
 from . import generate_pool, generate_progress
 from .scrape import Scraper
+from .serde import dumpf, loadf
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -61,14 +62,13 @@ def progress(links, save=None, prev=None):
     scraper = Scraper()
     players_then = None
     if prev is not None:
-        players_then = pickle.loads(Path(prev).read_bytes())
+        players_then = loadf(prev)
     players_now = {}
     for line in lines:
         player = scraper.parse_player(line)
         players_now[line] = player
     if save:
-        with open(save, "wb") as f:
-            pickle.dump(players_now, f)
+        dumpf(save, players_now, indent=2)
     print(generate_progress.render(players_now, players_then))
 
 

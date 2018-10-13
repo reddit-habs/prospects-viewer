@@ -57,6 +57,10 @@ def is_tournament(stats_row):
     return "team-continent-INT" in stats_row.get("class")
 
 
+def is_injured(stats_row):
+    return len(stats_row.find_all("i", class_="fa-injured")) > 0
+
+
 def parse_skater_stats(seasons, player):
     for row in seasons:
         season_str = get_td_class_text(row, "season")
@@ -79,6 +83,7 @@ def parse_skater_stats(seasons, player):
                 assists=assists,
                 plus_minus=plus_minus,
                 tournament=is_tournament(row),
+                injured=is_injured(row),
             )
         )
 
@@ -102,6 +107,7 @@ def parse_goalie_stats(seasons, player):
                 goal_average=goal_average,
                 save_percent=save_percent,
                 tournament=is_tournament(row),
+                injured=is_injured(row),
             )
         )
 
