@@ -186,7 +186,6 @@ class Scraper:
             draft=draft,
             scouting_report=scouting_report,
         )
-
         seasons = doc.find("table", class_="player-stats").find("tbody").find_all("tr")
 
         if Position.GOALIE != position:

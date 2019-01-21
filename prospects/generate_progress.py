@@ -1,5 +1,7 @@
+import re
+
 from .dto import Position, Shoots
-from .markdown import H1, H2, Document, Table
+from .markdown import H1, H2, Document, Link, Table
 
 SORT_ORDER_POS = ["C", "LW", "RW", "W", "F", "LD", "RD", "G"]
 
@@ -31,9 +33,13 @@ def get_player_name(player, stats):
         return player.name
 
 
+def get_team_name(team_name):
+    return re.sub(r"“(\w+)”", r" (\1)", team_name)
+
+
 def make_skater_table(skater_list, prev_data=None):
     skaters_table = Table()
-    skaters_table.add_columns("Position", "Name", "Age", "League", "GP", "G", "A", "Pts", "PPG", "+/-", "Draft")
+    skaters_table.add_columns("Position", "Name", "Age", "Team", "League", "GP", "G", "A", "Pts", "PPG", "+/-", "Draft")
 
     for player, pos, url in skater_list:
         stats = [stats for stats in player.stats if stats.season_end == 2019 and not stats.tournament]
@@ -44,40 +50,29 @@ def make_skater_table(skater_list, prev_data=None):
                 if prev is not None:
                     srow = srow.substract(prev)
 
-            if idx == 0:
-                skaters_table.add_row(
-                    pos,
-                    get_player_name(player, srow),
-                    "{:.1f}".format(player.age_frac),
-                    srow.league_name,
-                    srow.games,
-                    srow.goals,
-                    srow.assists,
-                    srow.points,
-                    srow.points_per_game,
-                    srow.plus_minus,
-                    player.draft.short if player.draft else "-",
-                )
-            else:
-                skaters_table.add_row(
-                    "-",
-                    "-",
-                    "-",
-                    srow.league_name,
-                    srow.games,
-                    srow.goals,
-                    srow.assists,
-                    srow.points,
-                    srow.points_per_game,
-                    srow.plus_minus,
-                    "-",
-                )
+            if prev_data is not None and srow.points == 0:
+                continue
+
+            skaters_table.add_row(
+                pos,
+                Link(get_player_name(player, srow), player.url),
+                "{:.1f}".format(player.age_frac),
+                get_team_name(srow.team_name),
+                srow.league_name,
+                srow.games,
+                srow.goals,
+                srow.assists,
+                srow.points,
+                srow.points_per_game,
+                srow.plus_minus,
+                player.draft.short if player.draft else "-",
+            )
     return skaters_table
 
 
 def make_goalie_table(goalie_list):
     goalie_table = Table()
-    goalie_table.add_columns("Position", "Name", "Age", "League", "GP", "SV%", "GAA", "Draft")
+    goalie_table.add_columns("Position", "Name", "Age", "Team", "League", "GP", "SV%", "GAA", "Draft")
 
     for player, pos, url in goalie_list:
         stats = [stats for stats in player.stats if stats.season_end == 2019 and not stats.tournament]
@@ -87,6 +82,7 @@ def make_goalie_table(goalie_list):
                     pos,
                     get_player_name(player, srow),
                     "{:.1f}".format(player.age_frac),
+                    get_team_name(srow.team_name),
                     srow.league_name,
                     srow.games,
                     srow.save_percent,
