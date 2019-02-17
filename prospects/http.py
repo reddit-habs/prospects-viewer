@@ -1,20 +1,30 @@
 import gzip
 import hashlib
 import logging
-import os
 import pickle
 import random
+import sqlite3
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import requests
 
 logger = logging.getLogger(__name__)
 
+_TABLES_SQL = """\
+CREATE TABLE IF NOT EXISTS requests (
+    identity TEXT PRIMARY KEY NOT NULL,
+    content BLOB NOT NULL,
+    timestamp REAL NOT NULL
+) WITHOUT ROWID;
+"""
+
 
 class CachingClient:
-    def __init__(self, *, base_path=".request-cache", cache_duration=timedelta(days=1), delay=0.0, jitter=True):
-        self._base_path = base_path
+    def __init__(self, *, path=".request-cache.db", cache_duration=timedelta(days=1), delay=0.0, jitter=True):
+        self._db = sqlite3.connect(path)
+        self._db.execute(_TABLES_SQL)
+        self._db.commit()
         self._session = requests.Session()
         self._session.headers.update(
             {"user-agent": "Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0"}
@@ -24,47 +34,46 @@ class CachingClient:
         self._jitter = jitter
         self._wait_until = time.monotonic()
 
-        os.makedirs(base_path, exist_ok=True)
-
-    def _fetch_and_cache(self, prepped, complete_path):
-        sleep_for = max(0, self._wait_until - time.monotonic())
-        time.sleep(sleep_for)
-
-        resp = self._session.send(prepped)
-        with gzip.open(complete_path, "wb") as f:
-            pickle.dump(resp, f)
-
-        delay = self._delay
-        if self._jitter:
-            offset = self._delay * 0.25
-            delay += random.uniform(-offset, offset)
-
-        logger.debug("delay of %.2f for next request", delay)
-        self._wait_until = time.monotonic() + self._delay
-
-        logger.debug("loaded url from web %s", prepped.url)
-        return resp
+    def _compute_identity(self, prepped):
+        hasher = hashlib.sha1()
+        hasher.update(prepped.url.encode())
+        for header in sorted(prepped.headers.keys()):
+            hasher.update(header.lower())
+            hasher.update(prepped.headers[header])
+        return hasher.hexdigest()
 
     def get(self, url, params=None, **kwargs):
         req = requests.Request("GET", url, params, **kwargs)
         prepped = req.prepare()
+        identity = self._compute_identity(prepped)
+        cutoff = (datetime.utcnow() - self._cache_duration).timestamp()
 
-        hasher = hashlib.sha1()
-        hasher.update(prepped.url.encode())
-        url_hash = hasher.hexdigest()
+        cur = self._db.execute("SELECT content FROM requests WHERE identity = ? AND timestamp > ?", (identity, cutoff))
+        res = cur.fetchone()
+        if res is not None:
+            logger.debug("loaded url from cache %s", prepped.url)
 
-        complete_path = os.path.join(self._base_path, url_hash)
-        try:
-            stat = os.stat(complete_path)
-            if (time.time() - stat.st_mtime) < self._cache_duration.total_seconds():
-                with gzip.open(complete_path, "rb") as f:
-                    resp = pickle.load(f)
-                logger.debug("loaded url from cache %s", prepped.url)
-            else:
-                logger.debug("fetching document %s because it is expired", prepped.url)
-                resp = self._fetch_and_cache(prepped, complete_path)
-        except FileNotFoundError:
-            logger.debug("fetching document %s because it was not on disk", prepped.url)
-            resp = self._fetch_and_cache(prepped, complete_path)
+            return pickle.loads(gzip.decompress(res[0]))
+        else:
+            logger.debug("fetching document %s", prepped.url)
 
-        return resp
+            sleep_for = max(0, self._wait_until - time.monotonic())
+            time.sleep(sleep_for)
+
+            resp = self._session.send(prepped)
+
+            delay = self._delay
+            if self._jitter:
+                offset = self._delay * 0.25
+                delay += random.uniform(-offset, offset)
+
+            logger.debug("delay of %.2f for next request", delay)
+            self._wait_until = time.monotonic() + self._delay
+
+            resp.raise_for_status()
+            self._db.execute(
+                "INSERT OR REPLACE INTO requests (identity, content, timestamp) VALUES (?, ?, ?)",
+                (identity, gzip.compress(pickle.dumps(resp)), datetime.utcnow().timestamp()),
+            )
+            self._db.commit()
+            return resp
