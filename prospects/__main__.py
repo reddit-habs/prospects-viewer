@@ -9,7 +9,7 @@ import click
 
 from . import generate_pool, generate_progress
 from .scrape import Scraper
-from .serde import dumpf, loadf
+from .storage import Storage
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -56,19 +56,24 @@ def pool(url, pickle_path, json_path, use_pickle):
 @cli.command(help="generate a progress report on players")
 @click.option("--links", "links", required=True, help="path to a file with elite prospects URLs separated by a line")
 @click.option("--prev", "prev", help="path to last week's saved state")
-@click.option("--save", "save", help="where to save data dump")
-def progress(links, save=None, prev=None):
+def progress(links, prev=None):
     lines = filter(None, map(str.strip, Path(links).read_text().split("\n")))
     scraper = Scraper()
+    storage = Storage()
+
     players_then = None
+    prev = storage.get(prev)
     if prev is not None:
-        players_then = loadf(prev)
+        day, players_then = prev
+        print("Using data from", day)
+    else:
+        print("No previous data available")
+
     players_now = {}
     for line in lines:
         player = scraper.parse_player(line)
         players_now[line] = player
-    if save:
-        dumpf(save, players_now, indent=2)
+    storage.save(players_now)
     print(generate_progress.render(players_now, players_then))
 
 
