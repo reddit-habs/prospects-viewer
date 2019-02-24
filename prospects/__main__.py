@@ -2,6 +2,7 @@ import enum
 import json
 import logging
 import pickle
+import sys
 from pathlib import Path
 
 import attr
@@ -65,15 +66,18 @@ def progress(links, prev=None):
     prev = storage.get(prev)
     if prev is not None:
         day, players_then = prev
-        print("Using data from", day)
+        print("Using data from", day, file=sys.stderr)
     else:
-        print("No previous data available")
+        print("No previous data available", file=sys.stderr)
 
     players_now = {}
     for line in lines:
         player = scraper.parse_player(line)
         players_now[line] = player
-    storage.save(players_now)
+    try:
+        storage.save(players_now)
+    except Exception:
+        pass
     print(generate_progress.render(players_now, players_then))
 
 

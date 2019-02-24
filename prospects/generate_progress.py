@@ -77,29 +77,17 @@ def make_goalie_table(goalie_list):
     for player, pos, url in goalie_list:
         stats = [stats for stats in player.stats if stats.season_end == 2019 and not stats.tournament]
         for idx, srow in enumerate(stats):
-            if idx == 0:
-                goalie_table.add_row(
-                    pos,
-                    get_player_name(player, srow),
-                    "{:.1f}".format(player.age_frac),
-                    get_team_name(srow.team_name),
-                    srow.league_name,
-                    srow.games,
-                    srow.save_percent,
-                    srow.goal_average,
-                    player.draft.short if player.draft else "-",
-                )
-            else:
-                goalie_table.add_row(
-                    "-",
-                    "-",
-                    "-",
-                    srow.league_name,
-                    srow.games,
-                    srow.save_percent,
-                    srow.goal_average,
-                    player.draft.short if player.draft else "-",
-                )
+            goalie_table.add_row(
+                pos,
+                get_player_name(player, srow),
+                "{:.1f}".format(player.age_frac),
+                get_team_name(srow.team_name),
+                srow.league_name,
+                srow.games,
+                srow.save_percent,
+                srow.goal_average,
+                player.draft.short if player.draft else "-",
+            )
 
     return goalie_table
 
