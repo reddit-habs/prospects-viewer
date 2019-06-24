@@ -1,14 +1,16 @@
 import logging
 import re
+from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from .dto import Draft, GoalieStats, Player, Position, Shoots, SkaterStats
+from .dto import Position, Shoots
+from .models import Draft, StatLine, Player
 from .http import CachingClient
 
 RE_PLAYER_PATTERN = re.compile(r"(.+)\s+\(([^\)]+)\)")
-RE_SEASON_PATTERN = re.compile(r"(\d\d)\d\d\-(\d\d)")
+RE_SEASON_PATTERN = re.compile(r"(\d\d\d\d)\-(\d\d)")
 
 logger = logging.getLogger(__name__)
 client = CachingClient(delay=15)
@@ -48,9 +50,15 @@ def parse_player_string(player_str):
 
 def parse_season(season_str):
     match = RE_SEASON_PATTERN.match(season_str)
-    centuries = match.group(1)
-    decades = match.group(2)
-    return int(centuries + decades)
+    begin = int(match.group(1))
+    return begin, begin + 1
+
+
+def try_parse(val, ctor):
+    try:
+        return ctor(val)
+    except ValueError:
+        return None
 
 
 def is_tournament(stats_row):
@@ -65,51 +73,47 @@ def parse_skater_stats(seasons, player):
     for row in seasons:
         season_str = get_td_class_text(row, "season")
         if season_str:
-            last_season_end = parse_season(season_str)
+            season_begin, season_end = parse_season(season_str)
 
-        team_name = get_td_class_text(row, "team")
-        league_name = get_td_class_text(row, "league")
-        games = get_td_class_int(row, "gp")
-        goals = get_td_class_int(row, "g")
-        assists = get_td_class_int(row, "a")
-        plus_minus = get_td_class_int(row, "pm")
-        player.stats.append(
-            SkaterStats(
-                season_end=last_season_end,
-                games=games,
-                team_name=team_name,
-                league_name=league_name,
-                goals=goals,
-                assists=assists,
-                plus_minus=plus_minus,
-                tournament=is_tournament(row),
-                injured=is_injured(row),
-            )
-        )
+        if season_end > datetime.now().year:
+            continue
+
+        stats = StatLine()
+        stats.season_begin = season_begin
+        stats.season_end = season_end
+        stats.team_name = get_td_class_text(row, "team")
+        stats.league_name = get_td_class_text(row, "league")
+        stats.games = get_td_class_int(row, "gp")
+        stats.is_tournament = is_tournament(row)
+
+        stats.goals = get_td_class_int(row, "g")
+        stats.assists = get_td_class_int(row, "a")
+        stats.plus_minus = get_td_class_int(row, "pm")
+
+        player.stats.append(stats)
 
 
 def parse_goalie_stats(seasons, player):
     for row in seasons:
         season_str = get_td_class_text(row, "season")
         if season_str:
-            last_season_end = parse_season(season_str)
-        team_name = get_td_class_text(row, "team")
-        league_name = get_td_class_text(row, "league")
-        games = get_td_class_int(row, "gp")
-        goal_average = get_td_class_text(row, "gaa")
-        save_percent = get_td_class_text(row, "svp")
-        player.stats.append(
-            GoalieStats(
-                season_end=last_season_end,
-                games=games,
-                team_name=team_name,
-                league_name=league_name,
-                goal_average=goal_average,
-                save_percent=save_percent,
-                tournament=is_tournament(row),
-                injured=is_injured(row),
-            )
-        )
+            season_begin, season_end = parse_season(season_str)
+
+        if season_end > datetime.now().year:
+            continue
+
+        stats = StatLine()
+        stats.season_begin = season_begin
+        stats.season_end = season_end
+        stats.team_name = get_td_class_text(row, "team")
+        stats.league_name = get_td_class_text(row, "league")
+        stats.games = get_td_class_int(row, "gp")
+        stats.is_tournament = is_tournament(row)
+
+        stats.goal_average = try_parse(get_td_class_text(row, "gaa"), float)
+        stats.save_percent = try_parse(get_td_class_text(row, "svp"), float)
+
+        player.stats.append(stats)
 
 
 def parse_data_col(row):
@@ -134,9 +138,23 @@ def pick_best_position(positions_str):
             return Position.FORWARD
 
 
+def parse_birthday(text):
+    return datetime.strptime(text, "%b %d, %Y").date()
+
+
+RE_DRAFT_STR = re.compile(r"(\d{4}) round (\d+) #(\d+) overall by (.+)")
+
+
+def draft_from_str(draft_str):
+    match = RE_DRAFT_STR.match(draft_str)
+    if not match:
+        raise ValueError("invalid draft string")
+    return Draft(year=int(match.group(1)), round=int(match.group(2)), overall=int(match.group(3)), team=match.group(4))
+
+
 class Scraper:
     def __init__(self):
-        self._client = CachingClient(delay=10)
+        self._client = CachingClient(cache_duration=timedelta(hours=24), delay=5)
 
     def parse_player(self, url, name=None, position=None):
         logger.info("Processing player at %s", url)
@@ -149,43 +167,35 @@ class Scraper:
         if name is None:
             name = get_element_text(doc.find(class_="plytitle").find_all(text=True, recursive=False))
 
+        player = Player(name=name)
+
         sections = extra_div.find_all("li")
-        draft = None
+
         for section in sections:
             first, second, *_rest = section.find_all("div")
             if "drafted" in get_element_text(first).lower():
-                draft = Draft.from_str(get_element_text(second))
-                break
+                player.drafts.append(draft_from_str(get_element_text(second)))
         scouting_report = get_element_text(doc.find("div", class_="dtl-txt"))
 
         rows = left_side.find_all("li")
-        birthday = parse_data_col(rows[0])
-        age = parse_data_col(rows[1])
-        birthplace = parse_data_col(rows[2])
-        nation = parse_data_col(rows[3])
+
+        player.birthday = parse_birthday(parse_data_col(rows[0]))
+        player.birthplace = parse_data_col(rows[2])
+        player.nation = parse_data_col(rows[3])
 
         rows = right_side.find_all("li")
-        height = parse_data_col(rows[1])
-        weight = parse_data_col(rows[2])
-        shoots = Shoots.from_str(parse_data_col(rows[3]))
+
+        player.height = parse_data_col(rows[1])
+        player.weight = parse_data_col(rows[2])
+        player.shoots = Shoots.from_str(parse_data_col(rows[3]))
         if position is None:
             positions_str = parse_data_col(rows[0])
             position = pick_best_position(positions_str)
+        player.position = position
 
-        player = Player(
-            name=name,
-            position=position,
-            birthday=birthday,
-            age=age,
-            nation=nation,
-            birthplace=birthplace,
-            shoots=shoots,
-            height=height,
-            weight=weight,
-            url=url,
-            draft=draft,
-            scouting_report=scouting_report,
-        )
+        player.url = url
+        player.scouting_report = scouting_report
+
         seasons = doc.find("table", class_="player-stats").find("tbody").find_all("tr")
 
         if Position.GOALIE != position:
@@ -195,7 +205,7 @@ class Scraper:
 
         return player
 
-    def parse_depth_chart(self, url):
+    def parse_depth_chart(self, db, url):
         doc = create_dom(self._client.get(url).text)
 
         table = doc.find("table", class_="depth-chart")
@@ -206,15 +216,18 @@ class Scraper:
 
         players = []
         current_position = None
-        for row in rows:
-            if "title" in row.attrs.get("class", []):
-                current_position = Position.from_str(get_element_text(row))
-            else:
-                player_str = get_element_text(row.find("td", class_="player"))
-                name, _ = parse_player_string(player_str)
-                url = row.find("a").attrs["href"]
-                player = self.parse_player(url, name, current_position)
-                players.append(player)
+
+        with db.session() as sess:
+            for row in rows:
+                if "title" in row.attrs.get("class", []):
+                    current_position = Position.from_str(get_element_text(row))
+                else:
+                    player_str = get_element_text(row.find("td", class_="player"))
+                    name, _ = parse_player_string(player_str)
+                    url = row.find("a").attrs["href"]
+                    player = self.parse_player(url, name, current_position)
+                    sess.merge(player)
+                    sess.commit()
 
         return players
 

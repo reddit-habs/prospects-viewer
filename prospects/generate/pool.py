@@ -1,4 +1,4 @@
-from .dto import Position, Shoots, SkaterStats
+from .dto import Position, Shoots
 from .markdown import Document, Table, H2, Link
 
 
@@ -25,15 +25,7 @@ def get_skater_stats(skater):
     for stats in filter_stats(skater):
         league = stats.league_name.upper()
         if league not in leagues:
-            leagues[league] = SkaterStats(
-                season_end=2018,
-                team_name=[stats.team_name],
-                league_name=league,
-                games=stats.games,
-                goals=stats.goals,
-                assists=stats.assists,
-                plus_minus=stats.plus_minus,
-            )
+            pass
         else:
             agg_stats = leagues[league]
             agg_stats.team_name.append(stats.team_name)
@@ -56,16 +48,16 @@ def get_goalie_stats(goalie):
 
 # https://twitter.com/robvollmannhl/status/866477120360402944
 TRANSLATION_FACTOR = {
-    "KHL": .74,
-    "SHL": .58,
-    "ALLSVENSKAN": .50,  # weaker end of the SHL
-    "AHL": .47,
-    "LIIGA": .43,
-    "NLA": .43,
-    "NCAA": .38,  # estimate based on conference average NCHC > H-EST > BIG-10 > ECAC
-    "OHL": .30,
-    "WHL": .29,
-    "QMJHL": .25,
+    "KHL": 0.74,
+    "SHL": 0.58,
+    "ALLSVENSKAN": 0.50,  # weaker end of the SHL
+    "AHL": 0.47,
+    "LIIGA": 0.43,
+    "NLA": 0.43,
+    "NCAA": 0.38,  # estimate based on conference average NCHC > H-EST > BIG-10 > ECAC
+    "OHL": 0.30,
+    "WHL": 0.29,
+    "QMJHL": 0.25,
 }
 
 
@@ -146,17 +138,7 @@ def render(players):
 
     def generate_goalie_table(goalies):
         t = Table()
-        t.add_columns(
-            "Player",
-            "Age",
-            "Height",
-            "Weight",
-            "League",
-            "Games",
-            "GAA",
-            "SV%",
-            "Drafted",
-        )
+        t.add_columns("Player", "Age", "Height", "Weight", "League", "Games", "GAA", "SV%", "Drafted")
         for player in goalies:
             stats = get_goalie_stats(player)
             t.add_row(

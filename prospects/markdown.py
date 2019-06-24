@@ -10,7 +10,7 @@ def iter_first(iterable):
 
 
 def escape(url):
-    return url.replace("(", "\(").replace(")", "\)")
+    return url.replace("(", "\\(").replace(")", "\\)")
 
 
 class Buffer:
@@ -172,6 +172,8 @@ class Table(Element):
                     w.write("|")
                 if isinstance(item, Element):
                     item.render(w)
+                elif item is None:
+                    w.write("-")
                 else:
                     w.write(str(item))
             w.write("\n")
